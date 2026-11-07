@@ -1,0 +1,39 @@
+name: build-catalog
+
+on:
+  push:
+    paths:
+      - 'azan/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+jobs:
+  catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build catalog.json
+        run: |
+          OWNER=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          REPO="${GITHUB_REPOSITORY#*/}"
+          python3 make_catalog.py azan "https://${OWNER}.github.io/${REPO}/azan"
+
+      - name: Commit catalog.json
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add azan/catalog.json
+          git diff --cached --quiet || (git commit -m "update catalog" && git push)
+
+      - name: Request Pages build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages/builds" || true
